@@ -40,7 +40,7 @@ defmodule VcfNotifierTest do
         body: "Async SMS"
       }
 
-      task = VcfNotifier.send_async(attrs)
+      {:ok, task} = VcfNotifier.send_async(attrs)
       assert {:ok, %Notification{status: :sent}} = Task.await(task)
     end
   end

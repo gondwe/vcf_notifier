@@ -5,7 +5,7 @@ defmodule VcfNotifier.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/YOUR_USERNAME/vcf_notifier"
+  @source_url "https://github.com/gondwe/vcf_notifier"
 
   def project do
     [
@@ -24,7 +24,8 @@ defmodule VcfNotifier.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {VcfNotifier.Application, []}
     ]
   end
 
@@ -35,6 +36,19 @@ defmodule VcfNotifier.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      # Email functionality
+      {:swoosh, "~> 1.14"},
+      {:finch, "~> 0.16"},
+      {:jason, "~> 1.4"},
+
+      # Background job processing
+      {:oban, "~> 2.15"},
+
+      # Database (required for Oban)
+      {:ecto_sql, "~> 3.10"},
+      {:postgrex, "~> 0.17"},
+
+      # Development and testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}

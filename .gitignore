@@ -21,3 +21,4 @@ vcf_notifier-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+*.instructions.md
