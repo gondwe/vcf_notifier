@@ -4,13 +4,13 @@ defmodule VcfNotifier.MixProject do
   """
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/gondwe/vcf_notifier"
 
   def project do
     [
       app: :vcf_notifier,
-      version: @version,
+      version: "0.1.1",
       elixir: "~> 1.1",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
