@@ -1,8 +1,6 @@
 defmodule VcfNotifier do
   @moduledoc """
-  VcfNotifier is a flexible notification library for Elixir applications.
-
-  It provides a simple interface for sending notifications through various channels
+  VcfNotifier provides a simple interface for sending notifications through various channels
   like email, SMS, push notifications, etc. with support for background processing
   using Oban queues.
 
@@ -49,8 +47,7 @@ defmodule VcfNotifier do
 
   """
 
-  alias VcfNotifier.{Notification, Sender}
-  alias VcfNotifier.Email.Service, as: EmailService
+  alias VcfNotifier.Notification
 
   @doc """
   Sends a notification based on the provided attributes.
@@ -71,9 +68,9 @@ defmodule VcfNotifier do
   @spec send(map()) :: {:ok, Notification.t()} | {:error, term()}
   def send(attrs) when is_map(attrs) do
     with {:ok, notification} <- Notification.build(attrs) do
-      case notification.type do
-        :email -> EmailService.send_now(notification)
-        _ -> Sender.send(notification)
+      case handler_module(notification.type) do
+        nil -> {:error, "Unsupported notification type: #{notification.type}"}
+        handler -> handler.send(notification)
       end
     end
   end
@@ -86,14 +83,9 @@ defmodule VcfNotifier do
   @spec send_async(map(), keyword()) :: {:ok, Oban.Job.t() | Task.t()} | {:error, term()}
   def send_async(attrs, opts \\ []) when is_map(attrs) do
     with {:ok, notification} <- Notification.build(attrs) do
-      case notification.type do
-        :email ->
-          EmailService.send_async(notification, opts)
-
-        _ ->
-          # For non-email notifications, use Task.async for now
-          task = Task.async(fn -> Sender.send(notification) end)
-          {:ok, task}
+      case handler_module(notification.type) do
+        nil -> {:error, "Unsupported notification type: #{notification.type}"}
+        handler -> handler.send_async(notification, opts)
       end
     end
   end
@@ -105,9 +97,14 @@ defmodule VcfNotifier do
   @spec send_at(map(), DateTime.t(), keyword()) :: {:ok, Oban.Job.t()} | {:error, term()}
   def send_at(attrs, %DateTime{} = send_time, opts \\ []) when is_map(attrs) do
     with {:ok, notification} <- Notification.build(attrs) do
-      case notification.type do
-        :email -> EmailService.send_at(notification, send_time, opts)
-        _ -> {:error, "Scheduled sending is only supported for email notifications"}
+      case handler_module(notification.type) do
+        nil -> {:error, "Scheduled sending is not supported for notification type: #{notification.type}"}
+        handler ->
+          if function_exported?(handler, :send_at, 3) do
+            handler.send_at(notification, send_time, opts)
+          else
+            {:error, "Scheduled sending is not supported for notification type: #{notification.type}"}
+          end
       end
     end
   end
@@ -119,9 +116,14 @@ defmodule VcfNotifier do
   @spec send_in(map(), integer(), keyword()) :: {:ok, Oban.Job.t()} | {:error, term()}
   def send_in(attrs, delay_seconds, opts \\ []) when is_map(attrs) and is_integer(delay_seconds) do
     with {:ok, notification} <- Notification.build(attrs) do
-      case notification.type do
-        :email -> EmailService.send_in(notification, delay_seconds, opts)
-        _ -> {:error, "Delayed sending is only supported for email notifications"}
+      case handler_module(notification.type) do
+        nil -> {:error, "Delayed sending is not supported for notification type: #{notification.type}"}
+        handler ->
+          if function_exported?(handler, :send_in, 3) do
+            handler.send_in(notification, delay_seconds, opts)
+          else
+            {:error, "Delayed sending is not supported for notification type: #{notification.type}"}
+          end
       end
     end
   end
@@ -133,7 +135,7 @@ defmodule VcfNotifier do
   @spec send_bulk_email(list(String.t()), map(), keyword()) :: {:ok, list(Oban.Job.t())} | {:error, term()}
   def send_bulk_email(recipients, email_data, opts \\ []) when is_list(recipients) do
     email_attrs = Map.put(email_data, :type, :email)
-    EmailService.send_bulk(recipients, email_attrs, opts)
+    VcfNotifier.Email.send_bulk_email(recipients, email_attrs, opts)
   end
 
   @doc """
@@ -158,6 +160,17 @@ defmodule VcfNotifier do
   """
   @spec test_auto_proxy(String.t()) :: String.t()
   def test_auto_proxy(message) do
+
     "Auto-proxied: #{message}"
   end
+
+  # Returns the module that implements the notification type
+  defp handler_module(:email), do: VcfNotifier.Email
+  defp handler_module(:sms), do: VcfNotifier.SMS
+  defp handler_module(:push), do: VcfNotifier.Push
+  defp handler_module(:webhook), do: VcfNotifier.Webhook
+  defp handler_module(_), do: nil
+
+  # Suppress nil warnings since we check for nil explicitly
+  @dialyzer {:nowarn_function, handler_module: 1}
 end

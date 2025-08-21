@@ -1,7 +1,87 @@
 defmodule VcfNotifier.Email do
+  @behaviour VcfNotifier.NotificationBehaviour
   @moduledoc """
   Email struct and functionality for email notifications.
+  Implements NotificationBehaviour for email notifications.
   """
+  @impl VcfNotifier.NotificationBehaviour
+  def send(attrs) do
+    # Convert attrs to notification struct if needed
+    notification =
+      case attrs do
+        %VcfNotifier.Notification{} = n -> n
+        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
+      end
+
+    # Use the existing email service to send
+    VcfNotifier.Email.Service.send_now(notification)
+  end
+
+  @impl VcfNotifier.NotificationBehaviour
+  def send_async(attrs, opts \\ []) do
+    # Convert attrs to notification struct if needed
+    notification =
+      case attrs do
+        %VcfNotifier.Notification{} = n -> n
+        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
+      end
+
+    # Use the existing email service for async sending
+    VcfNotifier.Email.Service.send_async(notification, opts)
+  end
+
+  @impl VcfNotifier.NotificationBehaviour
+  def send_at(attrs, datetime, opts \\ []) do
+    # Convert attrs to notification struct if needed
+    notification =
+      case attrs do
+        %VcfNotifier.Notification{} = n -> n
+        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
+      end
+
+    # Use the existing email service for scheduled sending
+    VcfNotifier.Email.Service.send_at(notification, datetime, opts)
+  end
+
+  @impl VcfNotifier.NotificationBehaviour
+  def send_in(attrs, delay_seconds, opts \\ []) do
+    # Convert attrs to notification struct if needed
+    notification =
+      case attrs do
+        %VcfNotifier.Notification{} = n -> n
+        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
+      end
+
+    # Use the existing email service for delayed sending
+    VcfNotifier.Email.Service.send_in(notification, delay_seconds, opts)
+  end
+
+  @doc """
+  Sends bulk email notifications to multiple recipients.
+  """
+  def send_bulk_email(recipients, email_data, opts \\ []) when is_list(recipients) do
+    VcfNotifier.Email.Service.send_bulk(recipients, email_data, opts)
+  end
+
+  @doc """
+  Sends an email using a context module (mailer) - legacy/advanced approach.
+
+  For most use cases, prefer the flexible approach:
+  - Build email struct in your app
+  - Use VcfNotifier.Email.FlexibleService.send_now/1 or send_async/2
+  """
+  def send_with_context(ctx_module, params, opts \\ []) do
+    VcfNotifier.Email.Service.send_with_context(ctx_module, params, opts)
+  end
+
+  @doc """
+  Sends bulk emails using a context module - legacy/advanced approach.
+
+  For most use cases, prefer VcfNotifier.Email.FlexibleService.send_bulk_with_builder/3
+  """
+  def send_bulk_with_context(ctx_module, recipients_data, opts \\ []) when is_list(recipients_data) do
+    VcfNotifier.Email.Service.send_bulk_with_context(ctx_module, recipients_data, opts)
+  end
 
   import Swoosh.Email
 

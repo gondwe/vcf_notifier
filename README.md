@@ -1,150 +1,183 @@
 # VcfNotifier
 
-A flexible notification library for Elixir applications supporting multiple notification channels with robust background processing using Oban queues.
+A flexible Elixir library for handling notifications with reliable background processing.
 
-## 🚀 Features
+## Why VcfNotifier?
 
-### Email Notifications
-- **Multiple Providers**: SMTP, SendGrid, Mailgun, Postmark, Amazon SES
-- **Rich Content**: HTML emails, plain text, attachments
-- **Advanced Features**: CC/BCC, custom headers, reply-to
-- **Background Processing**: Reliable delivery using Oban workers
-- **Scheduled Delivery**: Send emails at specific times or after delays
-- **Bulk Sending**: Efficient bulk email operations
-- **Error Handling**: Automatic retries and comprehensive logging
+- **Flexible**: Works with your existing email templates and app structure
+- **Reliable**: Built on Oban for guaranteed delivery with retries
+- **Provider Agnostic**: Supports SMTP, SendGrid, Mailgun, and more
+- **Performance**: Async by default with efficient bulk operations
+- **Easy Testing**: Separates email building from delivery
 
-### Background Job Processing
-- **Oban Integration**: Reliable background job processing
-- **Queue Management**: Separate queues for different notification types
-- **Retry Logic**: Configurable retry attempts with exponential backoff
-- **Job Monitoring**: Built-in statistics and monitoring capabilities
-- **Dead Letter Queue**: Handle permanently failed jobs
-
-### Multi-Channel Support
-- **Email**: Full-featured email notifications
-- **SMS**: SMS notifications (ready for provider integration)
-- **Push Notifications**: Push notification support (ready for provider integration)
-- **Webhooks**: Webhook notifications (ready for provider integration)
-
-## 📦 Installation
+## Installation
 
 Add `vcf_notifier` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:vcf_notifier, "~> 0.1.0"}
+    {:vcf_notifier, "~> 0.1.0"},
+    {:oban, "~> 2.20"}  # Required for background processing
   ]
 end
 ```
 
-## ⚡ Quick Start
+## Quick Start
 
-### 1. Configuration
-
-Add to your `config/config.exs`:
+### 1. Configure Your Provider
 
 ```elixir
-# Database repo (required for Oban)
-config :vcf_notifier, 
-  repo: MyApp.Repo
-
-# Oban configuration
-config :vcf_notifier, Oban,
-  repo: MyApp.Repo,
-  plugins: [Oban.Plugins.Pruner],
-  queues: [emails: 10, default: 5]
-
-# Email provider
+# config/config.exs
 config :vcf_notifier,
   email_provider: :smtp,
-  default_from_email: "noreply@myapp.com"
-
-config :vcf_notifier, :email_providers,
-  smtp: %{
-    host: "smtp.gmail.com",
-    port: 587,
-    username: "your-email@gmail.com",
-    password: "your-app-password",
-    ssl: false,
-    tls: :if_available,
-    auth: :always
-  }
-```
-
-### 2. Add to Supervision Tree
-
-```elixir
-# In your application.ex
-def start(_type, _args) do
-  children = [
-    MyApp.Repo,
-    MyAppWeb.Endpoint,
-    VcfNotifier.Application  # Add this line
+  email_opts: [
+    sender_name: "MyApp",
+    sender_email: "noreply@myapp.com"
   ]
 
-  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
-  Supervisor.start_link(children, opts)
+# config/prod.exs
+config :vcf_notifier,
+  email_provider: :sendgrid,
+  providers: [
+    sendgrid: [api_key: System.get_env("SENDGRID_API_KEY")]
+  ]
+```
+
+### 2. Send Your First Email
+
+```elixir
+# Build your email
+email = %VcfNotifier.Email{
+  to: ["user@example.com"],
+  from: "welcome@myapp.com",
+  subject: "Welcome to MyApp!",
+  html_body: "<h1>Welcome!</h1><p>Thanks for joining us.</p>",
+  text_body: "Welcome! Thanks for joining us."
+}
+
+# Send it (async by default)
+{:ok, _job} = VcfNotifier.Email.FlexibleService.send_async(email)
+```
+
+### 3. Integration with Phoenix
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  
+  def create(conn, %{"user" => user_params}) do
+    case MyApp.Accounts.create_user(user_params) do
+      {:ok, user} ->
+        # Send welcome email asynchronously
+        send_welcome_email(user)
+        
+        conn
+        |> put_flash(:info, "Account created! Check your email.")
+        |> redirect(to: Routes.user_path(conn, :show, user))
+        
+      {:error, changeset} ->
+        render(conn, "new.html", changeset: changeset)
+    end
+  end
+  
+  defp send_welcome_email(user) do
+    email = %VcfNotifier.Email{
+      to: [user.email],
+      from: "welcome@myapp.com",
+      subject: "Welcome to MyApp, #{user.name}!",
+      html_body: MyApp.EmailTemplates.render("welcome.html", user: user)
+    }
+    
+    VcfNotifier.Email.FlexibleService.send_async(email)
+  end
 end
 ```
 
-### 3. Send Notifications
+## Clean API with Notification Alias
+
+For backward compatibility and cleaner syntax:
 
 ```elixir
-# Simple email
-Notification.send(%{
-  type: :email,
-  to: "user@example.com",
-  subject: "Welcome!",
-  body: "Welcome to our service!"
-})
+# These work the same way
+VcfNotifier.send_async(notification)
+Notification.send_async(notification)  # Cleaner!
+```
 
-# Background email
-Notification.send_async(%{
-  type: :email,
-  to: "user@example.com",
-  subject: "Newsletter",
-  body: "Your weekly newsletter",
-  metadata: %{
-    html_body: "<h1>Newsletter</h1><p>Content here...</p>"
+## Advanced Features
+
+### Bulk Email Sending
+
+```elixir
+# Define how to build each email
+builder_fn = fn user_id ->
+  user = MyApp.get_user!(user_id)
+  %VcfNotifier.Email{
+    to: [user.email],
+    subject: "Newsletter",
+    html_body: render_newsletter(user)
   }
-})
+end
 
-# Scheduled email (1 hour from now)
-Notification.send_in(%{
-  type: :email,
-  to: "user@example.com",
-  subject: "Reminder",
-  body: "Don't forget your appointment!"
-}, 3600)
+# Send to thousands of users efficiently
+VcfNotifier.Email.FlexibleService.send_bulk_with_builder(builder_fn, user_ids)
+```
 
-# Bulk emails
-recipients = ["user1@example.com", "user2@example.com"]
-email_data = %{
-  subject: "Announcement",
-  body: "Important announcement for everyone"
+### Scheduled Delivery
+
+```elixir
+# Send in 1 hour
+VcfNotifier.Email.FlexibleService.send_in(email, 3600)
+
+# Send at specific time
+VcfNotifier.Email.FlexibleService.send_at(email, ~U[2024-12-25 09:00:00Z])
+```
+
+### File Attachments
+
+```elixir
+email = %VcfNotifier.Email{
+  to: ["customer@example.com"],
+  subject: "Your Invoice",
+  attachments: [
+    %{
+      filename: "invoice.pdf",
+      data: pdf_binary,
+      content_type: "application/pdf"
+    }
+  ]
 }
-Notification.send_bulk_email(recipients, email_data)
-
-# Alternative: You can also use VcfNotifier directly
-VcfNotifier.send(%{type: :email, to: "user@example.com", subject: "Test", body: "Hello"})
 ```
 
-## 📧 Email Providers
+## Supported Providers
 
-### SMTP
-```elixir
-config :vcf_notifier, :email_providers,
-  smtp: %{
-    host: "smtp.gmail.com",
-    port: 587,
-    username: "your-email@gmail.com",
-    password: "your-app-password",
-    ssl: false,
-    tls: :if_available,
-    auth: :always
-  }
-```
+- **SMTP** - Any SMTP server
+- **SendGrid** - High deliverability email service
+- **Mailgun** - Developer-focused email API
+- **More coming soon** - AWS SES, Postmark, etc.
+
+## Coming Soon
+
+- 📱 SMS notifications (Twilio, AWS SNS)
+- 🔔 Push notifications (FCM, APNS)
+- 🔗 Webhook notifications
+- 📊 Delivery tracking and analytics
+
+## Documentation
+
+- [Complete Usage Examples](USAGE_EXAMPLES.md)
+- [Design Philosophy](DESIGN_PHILOSOPHY.md)
+- [API Documentation](https://hexdocs.pm/vcf_notifier)
+
+## Why This Architecture?
+
+Unlike other notification libraries that try to handle everything, VcfNotifier focuses on:
+
+1. **Your app builds emails** using your existing templates and data access
+2. **VcfNotifier handles delivery** with reliable queuing and provider management
+3. **Easy testing** since email building is separated from delivery
+4. **Gradual adoption** - migrate existing email systems piece by piece
+
 
 ### SendGrid
 ```elixir

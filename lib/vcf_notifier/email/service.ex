@@ -6,7 +6,7 @@ defmodule VcfNotifier.Email.Service do
   """
 
   alias VcfNotifier.{Email, Notification}
-  alias VcfNotifier.Email.Provider
+  alias VcfNotifier.Email.{Provider, ContextWorker}
   alias VcfNotifier.Workers.EmailWorker
   require Logger
 
@@ -108,4 +108,36 @@ defmodule VcfNotifier.Email.Service do
 
   # Private functions (removed the complex query functions for now)
   # These would be implemented once the application has a proper Repo configured
+
+  @doc """
+  Sends an email using a context module (mailer) asynchronously.
+  """
+  def send_with_context(ctx_module, params, opts \\ []) do
+    VcfNotifier.Email.ContextWorker.new_context_job(ctx_module, params, opts)
+    |> Oban.insert()
+  end
+
+  @doc """
+  Sends bulk emails using a context module.
+  """
+  def send_bulk_with_context(ctx_module, recipients_data, opts \\ []) when is_list(recipients_data) do
+    jobs =
+      recipients_data
+      |> Enum.map(&VcfNotifier.Email.ContextWorker.new_context_job(ctx_module, &1, opts))
+
+    case Oban.insert_all(jobs) do
+      {count, jobs} when count > 0 ->
+        Logger.info("Queued #{count} context-based bulk email jobs for #{ctx_module}")
+        {:ok, jobs}
+      _ ->
+        {:error, "Failed to queue bulk context emails"}
+    end
+  end
+
+  @doc """
+  Sends an email struct directly (used by context worker).
+  """
+  def send_email_struct(%Email{} = email) do
+    Provider.send_email(email)
+  end
 end
