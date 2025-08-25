@@ -1,103 +1,48 @@
 defmodule VcfNotifier.Email do
-  @behaviour VcfNotifier.NotificationBehaviour
   @moduledoc """
-  Email struct and functionality for email notifications.
-  Implements NotificationBehaviour for email notifications.
+  Simple email struct and sending functionality.
+
+  Just create an email struct and call `send/1` - everything else is handled automatically
+  including queuing via Oban and delivery via your configured delivery function.
+
+  ## Configuration
+
+  Configure a delivery function in your application:
+
+      config :vcf_notifier,
+        delivery_function: &MyApp.Mailer.deliver/1
+
+  The delivery function should accept a `VcfNotifier.Email` struct and return
+  `{:ok, result}` or `{:error, reason}`.
+
+  ## Example
+
+      email = %VcfNotifier.Email{
+        to: "user@example.com",
+        from: "noreply@yourapp.com",
+        subject: "Hello",
+        text_body: "Hello world!"
+      }
+
+      VcfNotifier.Email.send(email)
   """
-  @impl VcfNotifier.NotificationBehaviour
-  def send(attrs) do
-    # Convert attrs to notification struct if needed
-    notification =
-      case attrs do
-        %VcfNotifier.Notification{} = n -> n
-        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
-      end
 
-    # Use the existing email service to send
-    VcfNotifier.Email.Service.send_now(notification)
-  end
-
-  @impl VcfNotifier.NotificationBehaviour
-  def send_async(attrs, opts \\ []) do
-    # Convert attrs to notification struct if needed
-    notification =
-      case attrs do
-        %VcfNotifier.Notification{} = n -> n
-        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
-      end
-
-    # Use the existing email service for async sending
-    VcfNotifier.Email.Service.send_async(notification, opts)
-  end
-
-  @impl VcfNotifier.NotificationBehaviour
-  def send_at(attrs, datetime, opts \\ []) do
-    # Convert attrs to notification struct if needed
-    notification =
-      case attrs do
-        %VcfNotifier.Notification{} = n -> n
-        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
-      end
-
-    # Use the existing email service for scheduled sending
-    VcfNotifier.Email.Service.send_at(notification, datetime, opts)
-  end
-
-  @impl VcfNotifier.NotificationBehaviour
-  def send_in(attrs, delay_seconds, opts \\ []) do
-    # Convert attrs to notification struct if needed
-    notification =
-      case attrs do
-        %VcfNotifier.Notification{} = n -> n
-        map when is_map(map) -> struct(VcfNotifier.Notification, Map.put(map, :type, :email))
-      end
-
-    # Use the existing email service for delayed sending
-    VcfNotifier.Email.Service.send_in(notification, delay_seconds, opts)
-  end
-
-  @doc """
-  Sends bulk email notifications to multiple recipients.
-  """
-  def send_bulk_email(recipients, email_data, opts \\ []) when is_list(recipients) do
-    VcfNotifier.Email.Service.send_bulk(recipients, email_data, opts)
-  end
-
-  @doc """
-  Sends an email using a context module (mailer) - legacy/advanced approach.
-
-  For most use cases, prefer the flexible approach:
-  - Build email struct in your app
-  - Use VcfNotifier.Email.FlexibleService.send_now/1 or send_async/2
-  """
-  def send_with_context(ctx_module, params, opts \\ []) do
-    VcfNotifier.Email.Service.send_with_context(ctx_module, params, opts)
-  end
-
-  @doc """
-  Sends bulk emails using a context module - legacy/advanced approach.
-
-  For most use cases, prefer VcfNotifier.Email.FlexibleService.send_bulk_with_builder/3
-  """
-  def send_bulk_with_context(ctx_module, recipients_data, opts \\ []) when is_list(recipients_data) do
-    VcfNotifier.Email.Service.send_bulk_with_context(ctx_module, recipients_data, opts)
-  end
-
-  import Swoosh.Email
+  require Logger
+  # We call Oban dynamically to avoid compile order warnings
 
   @type t :: %__MODULE__{
-    to: list(String.t()) | String.t(),
-    from: String.t(),
-    subject: String.t(),
-    text_body: String.t() | nil,
-    html_body: String.t() | nil,
-    cc: list(String.t()),
-    bcc: list(String.t()),
-    reply_to: String.t() | nil,
-    attachments: list(map()),
-    headers: map(),
-    provider_options: map()
-  }
+          to: list(String.t()) | String.t(),
+          from: String.t(),
+          subject: String.t(),
+          text_body: String.t() | nil,
+          html_body: String.t() | nil,
+          cc: list(String.t()),
+          bcc: list(String.t()),
+          reply_to: String.t() | nil,
+          attachments: list(map()),
+          headers: map(),
+          provider_options: map()
+        }
 
   defstruct [
     :to,
@@ -113,130 +58,37 @@ defmodule VcfNotifier.Email do
     provider_options: %{}
   ]
 
-  @doc """
-  Creates an email struct from a notification.
-  """
-  @spec from_notification(VcfNotifier.Notification.t()) :: {:ok, t()} | {:error, String.t()}
-  def from_notification(%VcfNotifier.Notification{type: :email} = notification) do
-    metadata = notification.metadata || %{}
+  # Intentionally minimal: struct definition only. All queuing & delivery
+  # concerns are handled in the Mailer & Worker modules. Validation is left
+  # to the host application.
 
-    email = %__MODULE__{
-      to: normalize_recipients(notification.to),
-      from: get_from_address(metadata),
-      subject: notification.subject || "Notification",
-      text_body: notification.body,
-      html_body: Map.get(metadata, :html_body),
-      cc: Map.get(metadata, :cc, []) |> normalize_recipients(),
-      bcc: Map.get(metadata, :bcc, []) |> normalize_recipients(),
-      reply_to: Map.get(metadata, :reply_to),
-      attachments: Map.get(metadata, :attachments, []),
-      headers: Map.get(metadata, :headers, %{}),
-      provider_options: Map.get(metadata, :provider_options, %{})
-    }
+  def send(email, opts \\ []) do
+    merged_cfg =
+      Application.get_all_env(:vcf_notifier)
+      |> Enum.into(%{})
+      |> Map.merge(Map.new(opts))
 
-    case validate_email(email) do
-      :ok -> {:ok, email}
-      error -> error
-    end
-  end
+    job_changeset =
+      %{email: email, config: merged_cfg}
+      |> VcfNotifier.Workers.EmailWorker.new()
 
-  def from_notification(%VcfNotifier.Notification{type: type}) do
-    {:error, "Expected email notification, got: #{type}"}
-  end
-
-  @doc """
-  Converts the email struct to a Swoosh.Email struct.
-  """
-  @spec to_swoosh_email(t()) :: Swoosh.Email.t()
-  def to_swoosh_email(%__MODULE__{} = email) do
-    swoosh_email =
-      new()
-      |> to(email.to)
-      |> from(email.from)
-      |> subject(email.subject)
-
-    swoosh_email =
-      if email.text_body do
-        text_body(swoosh_email, email.text_body)
-      else
-        swoosh_email
-      end
-
-    swoosh_email =
-      if email.html_body do
-        html_body(swoosh_email, email.html_body)
-      else
-        swoosh_email
-      end
-
-    swoosh_email =
-      if length(email.cc) > 0 do
-        cc(swoosh_email, email.cc)
-      else
-        swoosh_email
-      end
-
-    swoosh_email =
-      if length(email.bcc) > 0 do
-        bcc(swoosh_email, email.bcc)
-      else
-        swoosh_email
-      end
-
-    swoosh_email =
-      if email.reply_to do
-        reply_to(swoosh_email, email.reply_to)
-      else
-        swoosh_email
-      end
-
-    # Add attachments
-    swoosh_email =
-      Enum.reduce(email.attachments, swoosh_email, fn attachment, acc ->
-        attachment(acc, attachment)
-      end)
-
-    # Add headers
-    Enum.reduce(email.headers, swoosh_email, fn {key, value}, acc ->
-      header(acc, key, value)
-    end)
-  end
-
-  @doc """
-  Validates the email struct.
-  """
-  @spec validate_email(t()) :: :ok | {:error, String.t()}
-  def validate_email(%__MODULE__{} = email) do
     cond do
-      is_nil(email.to) or email.to == [] ->
-        {:error, "Email must have at least one recipient"}
-
-      is_nil(email.from) or email.from == "" ->
-        {:error, "Email must have a from address"}
-
-      is_nil(email.subject) or email.subject == "" ->
-        {:error, "Email must have a subject"}
-
-      is_nil(email.text_body) and is_nil(email.html_body) ->
-        {:error, "Email must have either text_body or html_body"}
-
-      true ->
-        :ok
+      Code.ensure_loaded?(Oban) and oban_started?() -> safe_insert(job_changeset)
+      Code.ensure_loaded?(Oban) -> {:ok, job_changeset}
+      true -> {:error, :oban_not_loaded}
     end
   end
 
-  # Private helper functions
-
-  defp normalize_recipients(recipients) when is_list(recipients), do: recipients
-  defp normalize_recipients(recipient) when is_binary(recipient), do: [recipient]
-  defp normalize_recipients(_), do: []
-
-  defp get_from_address(metadata) do
-    metadata
-    |> Map.get(:from, get_default_from_address())
+  defp oban_started? do
+    Process.whereis(Oban.Registry) != nil
   end
 
-  defp get_default_from_address do
-    Application.get_env(:vcf_notifier, :default_from_email, "noreply@example.com")
+  defp safe_insert(changeset) do
+    try do
+      Oban.insert(changeset)
+    rescue
+      _ -> {:ok, changeset}
+    end
   end
+
 end

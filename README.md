@@ -1,14 +1,14 @@
 # VcfNotifier
 
-A flexible Elixir library for handling notifications with reliable background processing.
+A simple Elixir library for reliable email notifications with background processing via Oban.
 
 ## Why VcfNotifier?
 
-- **Flexible**: Works with your existing email templates and app structure
+- **Ultra Simple**: Just one function to queue emails
 - **Reliable**: Built on Oban for guaranteed delivery with retries
-- **Provider Agnostic**: Supports SMTP, SendGrid, Mailgun, and more
-- **Performance**: Async by default with efficient bulk operations
-- **Easy Testing**: Separates email building from delivery
+- **Provider Agnostic**: Works with any email service (Swoosh, Bamboo, custom APIs)
+- **Background Processing**: All emails are queued automatically
+- **Easy Integration**: Use `VcfNotifier.Mailer` in your app for clean API
 
 ## Installation
 
@@ -17,37 +17,60 @@ Add `vcf_notifier` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:vcf_notifier, "~> 0.1.0"},
-    {:oban, "~> 2.20"}  # Required for background processing
+    {:vcf_notifier, "~> 0.1.1"},
+    {:oban, "~> 2.15"},      # Required for background processing
+    {:ecto_sql, "~> 3.10"},  # Required for Oban
+    {:postgrex, "~> 0.17"}   # Required for Oban (or your DB adapter)
   ]
 end
 ```
 
 ## Quick Start
 
-### 1. Configure Your Provider
+### 1. Create Your Mailer
 
 ```elixir
-# config/config.exs
-config :vcf_notifier,
-  email_provider: :smtp,
-  email_opts: [
-    sender_name: "MyApp",
-    sender_email: "noreply@myapp.com"
-  ]
+defmodule MyApp.Mailer do
+  use VcfNotifier.Mailer
 
-# config/prod.exs
-config :vcf_notifier,
-  email_provider: :sendgrid,
-  providers: [
-    sendgrid: [api_key: System.get_env("SENDGRID_API_KEY")]
-  ]
+  # Implement delivery using your preferred email service
+  def deliver(%VcfNotifier.Email{} = email) do
+    # Example with Swoosh
+    swoosh_email = 
+      Swoosh.Email.new()
+      |> Swoosh.Email.to(email.to)
+      |> Swoosh.Email.from(email.from)
+      |> Swoosh.Email.subject(email.subject)
+      |> Swoosh.Email.text_body(email.text_body)
+      |> Swoosh.Email.html_body(email.html_body)
+    
+    MyApp.SwooshMailer.deliver(swoosh_email)
+  end
+end
 ```
 
-### 2. Send Your First Email
+### 2. Send Emails
 
 ```elixir
-# Build your email
+# Create an email
+email = %VcfNotifier.Email{
+  to: "user@example.com",
+  from: "noreply@myapp.com",
+  subject: "Welcome!",
+  text_body: "Welcome to our app!",
+  html_body: "<h1>Welcome!</h1>"
+}
+
+# Queue for delivery
+{:ok, job} = MyApp.Mailer.send(email)
+
+# Queue with options (delay, priority, different queue)
+{:ok, job} = MyApp.Mailer.send(email, [
+  delay: 300,     # Delay 5 minutes
+  priority: 1,    # Higher priority
+  queue: :urgent  # Use different queue
+])
+```
 email = %VcfNotifier.Email{
   to: ["user@example.com"],
   from: "welcome@myapp.com",

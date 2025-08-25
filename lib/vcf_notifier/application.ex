@@ -10,10 +10,7 @@ defmodule VcfNotifier.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # HTTP client for email services
-      {Finch, name: VcfNotifier.Finch}
-    ] ++ oban_children()
+    children = oban_children()
 
     opts = [strategy: :one_for_one, name: VcfNotifier.Supervisor]
 

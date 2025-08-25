@@ -10,8 +10,8 @@ defmodule VcfNotifier.MixProject do
   def project do
     [
       app: :vcf_notifier,
-      version: "0.1.1",
-      elixir: "~> 1.1",
+      version: @version,
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -24,29 +24,31 @@ defmodule VcfNotifier.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {VcfNotifier.Application, []}
+  mod: {VcfNotifier.Application, []},
+  extra_applications: [:logger, :ecto_sql]
     ]
   end
 
   defp description do
-    "A flexible notification library for Elixir applications supporting multiple notification channels."
+    "A simple notification queuing library for Elixir applications using Oban."
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # Email functionality
-      {:swoosh, "~> 1.14"},
-      {:finch, "~> 0.16"},
-      {:jason, "~> 1.4"},
-
       # Background job processing
-      {:oban, "~> 2.15"},
+      {:oban, "~> 2.19"},
+
+      # JSON encoding
+      {:jason, "~> 1.4"},
 
       # Database (required for Oban)
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
+
+      # Email delivery
+      {:bamboo, "~> 2.3.1"},
+      {:bamboo_phoenix, "~> 1.0"},
 
       # Development and testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},

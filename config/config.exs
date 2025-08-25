@@ -1,12 +1,27 @@
 import Config
 
+config :vcf_notifier,
+  ecto_repos: [VcfNotifier.Repo]
+
+# Default Repo config (override in runtime or env specific files)
+config :vcf_notifier, VcfNotifier.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "vcf_notifier_dev",
+  pool_size: 10
+
+# Optional Oban config example (apps can override or disable)
+# config :vcf_notifier, Oban,
+#   repo: VcfNotifier.Repo,
+#   queues: [emails: 10]
+
 # Default configuration for VcfNotifier library
 # This provides sensible defaults when the library is used standalone
 
 # For standalone testing without a configured repo
 config :vcf_notifier,
-  email_provider: :smtp,
-  default_from_email: "noreply@example.com"
+  email_provider: :test
 
 # Basic Oban configuration with in-memory repo for testing
 # In production, users should configure their own repo
@@ -16,19 +31,5 @@ config :vcf_notifier, Oban,
     emails: 10,
     default: 5
   ]
-
-config :vcf_notifier, :email_providers,
-  smtp: %{
-    host: "localhost",
-    port: 1025,
-    username: "",
-    password: "",
-    ssl: false,
-    tls: :never,
-    auth: :never
-  }
-
-# Configure Swoosh for testing
-config :swoosh, :api_client, false
 
 import_config "#{config_env()}.exs"

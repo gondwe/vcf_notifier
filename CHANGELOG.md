@@ -1,33 +1,32 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.1.1] - 2025-08-25
 
-## [0.1.1] - 2025-08-21
+### Changed
+- **BREAKING**: Removed all provider-specific code (Swoosh integrations)
+- **BREAKING**: Simplified to email-only queuing library  
+- **BREAKING**: Applications now implement `deliver/1` callback
+- Replaced complex notification system with single `send/1` function
+- Removed dependencies: `swoosh`, `finch`
+- Added `use VcfNotifier.Mailer` integration pattern
 
 ### Added
-- Enhanced email system with `VcfNotifier.Email.FlexibleService` for simplified app-controlled email building
-- `VcfNotifier.Email.ContextWorker` for advanced context-based email processing  
-- `VcfNotifier.Email.Generator` behaviour for structured email builders
-- Complete notification behaviour pattern with `send/1`, `send_async/2`, `send_at/3`, `send_in/3`
-- Comprehensive documentation including usage examples and design philosophy
-- Example mailer implementation
-- Enhanced error handling and logging
+- Ultra-simple API with `MyApp.Mailer.send/1`
+- Provider-agnostic email delivery
+- Clean integration via behaviour callback
 
-### Improved
-- Refactored core architecture to use handler module pattern
-- Better separation between email building and delivery
-- More flexible configuration options
-- Comprehensive test coverage (31 tests passing)
-
-### Documentation
-- Added `USAGE_EXAMPLES.md` with real-world examples
-- Added `DESIGN_PHILOSOPHY.md` explaining architectural decisions  
-- Added `ADVANCED_EMAIL_GUIDE.md` for complex use cases
-- Improved README with quick start guide
+### Removed
+- All email provider configurations
+- Complex notification routing
+- Multiple notification types (SMS, push, webhooks)
+- Bulk operations and scheduling (use Oban directly)
 
 ## [0.1.0] - 2025-08-21
 
 ### Added
+- Initial release with notification system
+- Email delivery via Swoosh
+- Oban integration for background processing
 - Initial release with basic email notification support
 - Oban integration for background processing
 - Multiple email provider support (SMTP, SendGrid, Mailgun)
