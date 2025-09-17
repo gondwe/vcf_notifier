@@ -18,7 +18,24 @@ defmodule VcfNotifier.Workers.EmailWorker do
 
     opts = Map.get(job_args, "config", [])
 
-    case VcfNotifier.Mailer.send(args, opts) do
+    mailer_mod =
+      cond do
+        mod = opts[:mailer_module] -> mod
+        mod = opts["mailer_module"] -> mod
+        mod = Application.get_env(:vcf_notifier, :mailer_module) -> mod
+        true -> VcfNotifier.Mailer
+      end
+
+    send_fun = function_exported?(mailer_mod, :send, 2) && &mailer_mod.send/2
+
+    result =
+      if send_fun do
+        send_fun.(args, opts)
+      else
+        {:error, :no_mailer_send}
+      end
+
+    case result do
       :ok ->
         :ok
 

@@ -21,11 +21,10 @@ defmodule VcfNotifier.MixProject do
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
-  mod: {VcfNotifier.Application, []},
-  extra_applications: [:logger, :ecto_sql]
+      mod: {VcfNotifier.Application, []},
+      extra_applications: [:logger, :ecto_sql]
     ]
   end
 
@@ -33,24 +32,15 @@ defmodule VcfNotifier.MixProject do
     "A simple notification queuing library for Elixir applications using Oban."
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # Background job processing
       {:oban, "~> 2.19"},
-
-      # JSON encoding
       {:jason, "~> 1.4"},
-
-      # Database (required for Oban)
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
-
-      # Email delivery
       {:bamboo, "~> 2.3.1"},
       {:bamboo_phoenix, "~> 1.0"},
-
-      # Development and testing
+      {:swoosh, "~> 1.16", optional: true},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
