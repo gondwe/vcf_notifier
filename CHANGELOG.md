@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2025-09-18
+
+### Changed
+- Bump version to allow Hex republish after validation error
+- Minor robustness in worker/backend interfaces
+
 ## [0.2.0] - 2025-08-26
 
 ### Added
