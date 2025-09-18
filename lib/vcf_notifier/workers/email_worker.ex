@@ -12,38 +12,55 @@ defmodule VcfNotifier.Workers.EmailWorker do
 
   require Logger
 
+  alias VcfNotifier.Backends.BambooBackend
+  alias VcfNotifier.Backends.SwooshBackend
+
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"email" => %{} = args} = job_args}) when map_size(args) > 0 do
+  def perform(%Oban.Job{args: args}) do
     Logger.info("Processing queued email")
 
-    opts = Map.get(job_args, "config", [])
+    %{"email" => %{} = data, "config" => opts} = args
 
-    mailer_mod =
-      cond do
-        mod = opts[:mailer_module] -> mod
-        mod = opts["mailer_module"] -> mod
-        mod = Application.get_env(:vcf_notifier, :mailer_module) -> mod
-        true -> VcfNotifier.Mailer
-      end
+    opts = resolve_key(opts, "default_from", "from")
+    opts = set_adapter(opts)
+    backend = fetch_backend(opts)
 
-    send_fun = function_exported?(mailer_mod, :send, 2) && &mailer_mod.send/2
-
-    result =
-      if send_fun do
-        send_fun.(args, opts)
-      else
-        {:error, :no_mailer_send}
-      end
-
-    case result do
-      :ok ->
-        :ok
-
-      {:error, reason} = err ->
-        Logger.error("Email delivery failed: #{inspect(reason)}")
-        err
-    end
+    data
+    |> backend.build_email(opts)
+    |> backend.deliver_email(atomize_opts(opts))
   end
 
   def perform(_), do: :discard
+
+  defp fetch_backend(config) do
+    case config["backend"] do
+      "bamboo" -> BambooBackend
+      "swoosh" -> SwooshBackend
+      other -> raise ArgumentError, "Unsupported backend: #{inspect(other)}"
+    end
+  end
+
+  defp resolve_key(opts, key, value) do
+    case opts[key] do
+      %{"name" => name, "email" => email} ->
+        Map.put(opts, value, {name, email})
+
+      _ ->
+        opts
+    end
+  end
+
+  defp set_adapter(opts) do
+    case opts["adapter"] do
+      a when is_binary(a) -> Map.put(opts, "adapter", String.to_existing_atom(a))
+      _ -> opts
+    end
+  end
+
+  defp atomize_opts(map) when is_map(map) do
+    map
+    |> Enum.map(fn {k, v} -> {String.to_existing_atom(k), v} end)
+    |> Enum.into(%{})
+    |> Keyword.new()
+  end
 end

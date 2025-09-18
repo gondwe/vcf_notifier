@@ -90,5 +90,4 @@ defmodule VcfNotifier.Email do
       _ -> {:ok, changeset}
     end
   end
-
 end

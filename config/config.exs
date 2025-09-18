@@ -26,10 +26,14 @@ config :vcf_notifier,
 # Basic Oban configuration with in-memory repo for testing
 # In production, users should configure their own repo
 config :vcf_notifier, Oban,
-  testing: :manual,
+  repo: VcfNotifier.Repo,
+  engine: Oban.Engines.Basic,
   queues: [
-    emails: 10,
-    default: 5
+    auto_approvals: 10,
+    stats: 2,
+    emails: 5,
+    ta_expiry_job: 5,
+    payment_notifications: 5
   ]
 
 import_config "#{config_env()}.exs"

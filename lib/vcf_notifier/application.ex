@@ -10,7 +10,11 @@ defmodule VcfNotifier.Application do
 
   @impl true
   def start(_type, _args) do
-    children = oban_children()
+    children =
+      [
+        VcfNotifier.Repo,
+        {Oban, Application.fetch_env!(:vcf_notifier, Oban)}
+      ]
 
     opts = [strategy: :one_for_one, name: VcfNotifier.Supervisor]
 
@@ -25,21 +29,21 @@ defmodule VcfNotifier.Application do
     end
   end
 
-  defp oban_children do
-    case Application.fetch_env(:vcf_notifier, Oban) do
-      {:ok, oban_config} ->
-        # Only start Oban if we have a proper configuration
-        if Keyword.get(oban_config, :testing) == :manual do
-          # In test mode, don't start Oban
-          []
-        else
-          [{Oban, oban_config}]
-        end
+  # defp oban_children do
+  #   case Application.fetch_env(:vcf_notifier, Oban) do
+  #     {:ok, oban_config} ->
+  #       # Only start Oban if we have a proper configuration
+  #       if Keyword.get(oban_config, :testing) == :manual do
+  #         # In test mode, don't start Oban
+  #         []
+  #       else
+  #         [{Oban, oban_config}]
+  #       end
 
-      :error ->
-        # No Oban configuration found, skip starting Oban
-        Logger.warning("No Oban configuration found, background jobs will not be available")
-        []
-    end
-  end
+  #     :error ->
+  #       # No Oban configuration found, skip starting Oban
+  #       Logger.warning("No Oban configuration found, background jobs will not be available")
+  #       []
+  #   end
+  # end
 end

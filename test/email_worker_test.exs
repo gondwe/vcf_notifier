@@ -6,7 +6,7 @@ defmodule VcfNotifier.Workers.EmailWorkerTest do
   setup do
     # Ensure test mode for email delivery
     Application.put_env(:vcf_notifier, :email_provider, :test)
-  Application.put_env(:vcf_notifier, :mailer_module, VcfNotifier.Mailer)
+    Application.put_env(:vcf_notifier, :mailer_module, VcfNotifier.Mailer)
     :ok
   end
 
@@ -26,10 +26,20 @@ defmodule VcfNotifier.Workers.EmailWorkerTest do
         "provider_options" => %{}
       }
 
-  job = %Oban.Job{args: %{"email" => email_data, "config" => %{default_subject: "Alt", mailer_module: VcfNotifier.Mailer}}}
+      job = %Oban.Job{
+        args: %{
+          "email" => email_data,
+          "config" => %{
+            default_subject: "Alt",
+            mailer_module: VcfNotifier.Mailer,
+            adapter: Bamboo.LocalAdapter,
+            backend: :bamboo
+          }
+        }
+      }
 
       # Should succeed in test mode
-      assert :ok = EmailWorker.perform(job) |> dbg()
+      assert :ok = EmailWorker.perform(job)
     end
 
     test "discards when missing email key" do

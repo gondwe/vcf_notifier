@@ -9,15 +9,15 @@ config :vcf_notifier, VcfNotifier.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 5
 
-# Test environment configuration
+# Test environment configuration - use inline testing for Oban
 config :vcf_notifier, Oban,
-  testing: :manual,
-  queues: false
+  testing: :inline,
+  queues: false,
+  repo: VcfNotifier.Repo
 
 # Configure test email provider
 config :vcf_notifier,
   email_provider: :test
-
 
 config :vcf_notifier, :email_opts,
   sender_name: "John Doe",
@@ -26,5 +26,4 @@ config :vcf_notifier, :email_opts,
   message: "How high are you?"
 
 # Configure Bamboo for testing
-config :vcf_notifier, VcfNotifier.Mailer,
-  adapter: Bamboo.LocalAdapter
+config :vcf_notifier, VcfNotifier.Mailer, adapter: Bamboo.LocalAdapter

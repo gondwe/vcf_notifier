@@ -9,7 +9,7 @@ defmodule VcfNotifier.MailerTest do
 
   test "Email.send builds job changeset merging configs when Oban not running" do
     email = %{to: "someone@example.com", subject: "Hi", text_body: "Body"}
-    {:ok, %Ecto.Changeset{} = cs} = Email.send(email, [custom: 1])
+    {:ok, %Ecto.Changeset{} = cs} = Email.send(email, custom: 1)
     args = cs.changes.args
     job_email = Map.fetch!(args, :email)
     cfg = Map.fetch!(args, :config)
